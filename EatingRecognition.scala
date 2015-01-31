@@ -5,7 +5,9 @@ import java.io.IOException
 import scala.collection.mutable.ArrayBuffer
 import weka.core._
 import java.util.ArrayList
-
+import play.api.libs.json._
+import play.api.libs.functional.syntax._
+import scala.io.Source
 
 object EatingRecognition {
   val FrameDuration = 30 	// length of a data frame in seconds
@@ -14,7 +16,8 @@ object EatingRecognition {
 	  // create, in the respective directory that matches the timestamp,
 	  // the class.txt file for the objects retrieved from foursquare checkins
 	  // matchCheckins()
-	  createInstanceObjects("../eating_data")	  
+	  getCheckins()
+	  //createInstanceObjects("../eating_data")	  
 	}
 
 	def createInstanceObjects(rootDir: String) {
@@ -101,7 +104,7 @@ object EatingRecognition {
 	}
 	
 	/*
-	 * Feature extraction
+	 * Feature computation
 	 */
 	
 	def accFeatures(file: String): List[(Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double)] = {
@@ -138,7 +141,7 @@ object EatingRecognition {
 	    }
 	    i += 1; j += 1
 	  }
-	  println(features.toList.length + " " + features.toList.head)
+	  // println(features.toList.length + " " + features.toList.head)
 	  features.toList
 	}
 	
@@ -168,7 +171,7 @@ object EatingRecognition {
 	    }
 	    i += 1; j += 1
 	  }
-	  println(features.toList.length + " " + features.toList.head)
+	  // println(features.toList.length + " " + features.toList.head)
 	  features.toList
 	}
 	
@@ -182,16 +185,12 @@ object EatingRecognition {
 	  case vs => (0.0 /: vs) { (a,e) => a + sqr(e - avg) } / vals.size
 	}
 	
-	def correlation(vals1: Array[Double], vals2: Array[Double], avg1: Double, avg2: Double): Double = {
+	def correlation(vals1: Array[Double], vals2: Array[Double], avg1: Double, avg2: Double): Double = 
 	  (for ((v1, v2) <- (vals1 zip vals2)) yield (v1-avg1)*(v2-avg2)).reduceLeft(_ + _) /
 	  	math.sqrt((for ((v1, v2) <- (vals1 zip vals2)) yield sqr(v1-avg1)*sqr(v2-avg2)).reduceLeft(_ + _))
-	}
 	
 	def energy(vals: Array[Double]): Double = vals.map(sqr).reduceLeft(_ + _)
 	
-	def matchCheckins() { 
-	  getCheckins()
-	}
 	
 	def sqr(x: Double): Double = x*x
 	
@@ -199,24 +198,24 @@ object EatingRecognition {
 	 * Class labels and Foursquare checkins
 	 */
 	
+	def matchCheckins() { 
+		getCheckins()
+	}
+
 	def assignLabels(file: String): String = {
 	  val csvf = new CSVFile(file)
 	  csvf.head(0)
 	  "o0fc0"
 	}
 	
-	def getCheckins()/*: Array[FsCheckin] =*/ {
-	  var f = new FoursquareApi("", "", "https://github.com/v0idness/")
-	  f.setVersion("20150113")
-	  var result = f.venuesTrending("44.3,37.2", 50, 2000)
-	  println(result.getMeta.getCode + "\n" + result.getMeta.getErrorType + "\n" + result.getMeta.getErrorDetail)
-	  println(result.getResult.length)
-	  for (venue <- result.getResult) println(venue.getName)
-	  // return all of the user's foursquare checkins
-	  /*
-	   *var checkins = new Array[FsCheckin](1)
-	   checkins(0) = new FsCheckin
-	   return checkins
-	   */
+	def getCheckins(): List[(Long,String)] = {
+	  // for the prototype, the url is hard-coded
+	  // for a multi-user application, it is necessary to authenticate each user and use their own URLs
+	  val url = new java.net.URL("https://api.foursquare.com/v2/users/self/checkins?oauth_token=1TW3BWUBZHNRL2BX41H33TM4WKXVT0WMBC30F0L1WNWS0Q0J&v=20150131")
+	  val response = Source.fromInputStream(url.openStream).getLines.mkString("\n")
+	  val checkins = Json.parse(response)
+	  (for ((c, v) <- (checkins \ "response" \ "checkins" \ "items" \\ "createdAt").map(_.toString.toLong) 
+	      zip (checkins \ "response" \ "checkins" \ "items" \\ "venue").map(_ \ "categories" \\ "shortName"))
+	    yield (c + 3600, v(0).toString)).toList
 	}
 }
