@@ -8,27 +8,27 @@ import java.util.ArrayList
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import scala.io.Source
+import scala.util.matching.Regex
 
 object EatingRecognition {
   val FrameDuration = 30 	// length of a data frame in seconds
+  val GMTOffset = 3600 		// all timestamps are in GMT, add 1h for local time
   
 	def main(args: Array[String]) {
 	  // create, in the respective directory that matches the timestamp,
 	  // the class.txt file for the objects retrieved from foursquare checkins
-	  // matchCheckins()
-	  getCheckins()
-	  //createInstanceObjects("../eating_data")	  
+	  createInstanceObjects("../eating_data")	  
 	}
 
 	def createInstanceObjects(rootDir: String) {
+	  val checkins = getCheckins()
 	  val atts = createAttributes()
 	  val instances = new Instances("eatingdata", atts, 0)
 	  instances.setClassIndex(0)
-	  var currInst: DenseInstance = null
-	  var unixTimestamp: Long = 0
 	  var accFeat: List[(Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double)] = null
 	  var tempFeat: List[(Double, Double, Long)] = null
 	  var label: String = ""
+	  var category: String = null
 		
 		
 	  val visitor = new SimpleFileVisitor[Path] {
@@ -37,8 +37,11 @@ object EatingRecognition {
 			  if (dir.getFileName.toString == "holdout") FileVisitResult.SKIP_SUBTREE
 			  else {
 			    if (dir.getFileName.toString != "eating_data") { 
-				  unixTimestamp = dir.getFileName.toString.stripSuffix("_37db67").toLong + 3600
-				  val date = new java.util.Date(unixTimestamp * 1000)
+			      category = null
+				  val timestamp = dir.getFileName.toString.stripSuffix("_37db67").toLong + GMTOffset
+				  for ((time,cat) <- checkins) 		// search if corresponding foursquare check-in exists
+				    if (timestamp-900 < time && timestamp+900 > time) category = cat
+				  val date = new java.util.Date(timestamp * 1000)
 				  println(date.toGMTString)
 			    }
 			    FileVisitResult.CONTINUE
@@ -50,7 +53,7 @@ object EatingRecognition {
 			  // zip together
 			  if (file.getFileName.toString == "ACC.csv") accFeat = accFeatures(file.toAbsolutePath.toString)
 			  if (file.getFileName.toString == "TEMP.csv") tempFeat = tempFeatures(file.toAbsolutePath.toString)
-			  if (file.getFileName.toString == "tags.csv") label = assignLabels(file.toAbsolutePath.toString)
+			  if (file.getFileName.toString == "tags.csv") label = assignLabel(file.toAbsolutePath.toString, category)
 			  FileVisitResult.CONTINUE
 			}
 			
@@ -62,7 +65,7 @@ object EatingRecognition {
 				if (dir.getFileName.toString != "eating_data") { 
 				  for (instanceValues <- featureListToAttValues(accFeat, tempFeat, label, instances)) {
 				    // setting attributes one at a time would be costly when dealing with many instances
-				    currInst = new DenseInstance(1, instanceValues)
+				    instances.add(new DenseInstance(1, instanceValues))
 				  }
 			    }
 			    FileVisitResult.CONTINUE
@@ -199,13 +202,18 @@ object EatingRecognition {
 	 */
 	
 	def matchCheckins() { 
-		getCheckins()
+		
 	}
 
-	def assignLabels(file: String): String = {
+	def assignLabel(file: String, category: String): String = {
+	  var out, fastfood, company = ""
 	  val csvf = new CSVFile(file)
-	  csvf.head(0)
-	  "o0fc0"
+	  if (csvf.head(1) == "1" || category != null && new Regex("(Fast Food|Falafel|Sandwiches)").findAllIn(category).length > 0) fastfood = "f1" 
+	    else fastfood = "f0"
+	  if (csvf.head(2) == "0") company = "c0" else if (csvf.head(2) == "1") company = "c1"
+	  if (csvf.head(0) == "0") { out = "o0"; fastfood = "f" } 
+	  else if (csvf.head(0) == "1" || category != null) { out = "o1"; company = "c" }
+	  out + fastfood + company
 	}
 	
 	def getCheckins(): List[(Long,String)] = {
@@ -214,8 +222,9 @@ object EatingRecognition {
 	  val url = new java.net.URL("https://api.foursquare.com/v2/users/self/checkins?oauth_token=1TW3BWUBZHNRL2BX41H33TM4WKXVT0WMBC30F0L1WNWS0Q0J&v=20150131")
 	  val response = Source.fromInputStream(url.openStream).getLines.mkString("\n")
 	  val checkins = Json.parse(response)
+	  
 	  (for ((c, v) <- (checkins \ "response" \ "checkins" \ "items" \\ "createdAt").map(_.toString.toLong) 
 	      zip (checkins \ "response" \ "checkins" \ "items" \\ "venue").map(_ \ "categories" \\ "shortName"))
-	    yield (c + 3600, v(0).toString)).toList
+	    yield (c + GMTOffset, v(0).toString.replaceAll("\"", ""))).toList
 	}
 }
