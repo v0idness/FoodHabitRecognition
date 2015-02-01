@@ -1,32 +1,32 @@
-import fi.foyt.foursquare.api._
-import fi.foyt.foursquare.api.entities._
-import java.nio.file._
-import java.io.IOException
-import scala.collection.mutable.ArrayBuffer
-import weka.core._
-import java.util.ArrayList
-import play.api.libs.json._
-import play.api.libs.functional.syntax._
 import scala.io.Source
 import scala.util.matching.Regex
+import scala.collection.mutable.ArrayBuffer
+import play.api.libs.json._
+import play.api.libs.functional.syntax._
+import java.util.ArrayList
+import java.io.IOException
+import java.nio.file._
+import weka.core._
+import weka.core.converters.ArffSaver
 
 object EatingRecognition {
-  val FrameDuration = 30 	// length of a data frame in seconds
+  val FrameDuration = 10 	// length of a data frame in seconds
   val GMTOffset = 3600 		// all timestamps are in GMT, add 1h for local time
   
 	def main(args: Array[String]) {
 	  // create, in the respective directory that matches the timestamp,
 	  // the class.txt file for the objects retrieved from foursquare checkins
-	  createInstanceObjects("../eating_data")	  
+	  createArffSet("../eating_data")	  
 	}
 
-	def createInstanceObjects(rootDir: String) {
+	def createArffSet(rootDir: String) {
 	  val checkins = getCheckins()
 	  val atts = createAttributes()
 	  val instances = new Instances("eatingdata", atts, 0)
 	  instances.setClassIndex(0)
-	  var accFeat: List[(Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double)] = null
-	  var tempFeat: List[(Double, Double, Long)] = null
+	  var accFeat: List[(Double, Double, Double, Double, Double, Double, Double, Double, Double,
+	      Double, Double, Double, Double, Double, Double, Double, Double, Double)] = null
+	  var tempFeat: List[(Double, Double, Double, Double, Long)] = null
 	  var label: String = ""
 	  var category: String = null
 		
@@ -73,6 +73,12 @@ object EatingRecognition {
 		}
 		
 		Files.walkFileTree(Paths.get(rootDir), visitor)
+		
+		// write to ARFF file
+		val as = new ArffSaver()
+		as.setInstances(instances)
+		as.setFile(new java.io.File("instances.arff"))
+		as.writeBatch()
 	}
 	
 	/*
@@ -86,36 +92,41 @@ object EatingRecognition {
 	  featLabelNominal.add("o1f1c")		// out fastfood
 	  featLabelNominal.add("o0fc0")		// at home alone
 	  featLabelNominal.add("o0fc1")		// at home with company
-	  val a1 = new Attribute("label", featLabelNominal)
-	  val a2 = new Attribute("meanx"); val a3 = new Attribute("meany"); val a4 = new Attribute("meanz")
-	  val a5 = new Attribute("variancex"); val a6 = new Attribute("variancey"); val a7 = new Attribute("variancez")
-	  val a8 = new Attribute("corrx"); val a9 = new Attribute("corry"); val a10 = new Attribute("corrz")
-	  val a11 = new Attribute("energyx"); val a12 = new Attribute("energyy"); val a13 = new Attribute("energyz")
-	  val a14 = new Attribute("meantemp"); val a15 = new Attribute("variancetemp")
-	  val a16 = new Attribute("mealDuration")
 	  val allAtt = new ArrayList[Attribute](16)
-	  allAtt.add(a1); allAtt.add(a2); allAtt.add(a3); allAtt.add(a4); allAtt.add(a5); allAtt.add(a6); allAtt.add(a7); allAtt.add(a8); 
-	  allAtt.add(a9); allAtt.add(a10); allAtt.add(a11); allAtt.add(a12); allAtt.add(a13); allAtt.add(a14); allAtt.add(a15); allAtt.add(a16)
+	  allAtt.add(new Attribute("label", featLabelNominal))
+	  allAtt.add(new Attribute("meanX")); allAtt.add(new Attribute("meanY")); allAtt.add(new Attribute("meanZ"))
+	  allAtt.add(new Attribute("varianceX")); allAtt.add(new Attribute("varianceY")); allAtt.add(new Attribute("varianceZ"))
+	  allAtt.add(new Attribute("corrX")); allAtt.add(new Attribute("corrY")); allAtt.add(new Attribute("corrZ"))
+	  allAtt.add(new Attribute("energyX")); allAtt.add(new Attribute("energyY")); allAtt.add(new Attribute("energyZ"))
+	  allAtt.add(new Attribute("minX")); allAtt.add(new Attribute("minY")); allAtt.add(new Attribute("minZ"))
+	  allAtt.add(new Attribute("maxX")); allAtt.add(new Attribute("maxY")); allAtt.add(new Attribute("maxZ"))
+	  allAtt.add(new Attribute("meanTemp")); allAtt.add(new Attribute("varianceTemp")); allAtt.add(new Attribute("minTemp"))
+	  allAtt.add(new Attribute("maxTemp")); allAtt.add(new Attribute("mealDuration"))
 	  allAtt
 	}
 	
 	def featureListToAttValues(
-	    accFeat: List[(Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double)], 
-	    tempFeat: List[(Double, Double, Long)], label: String, inst: Instances): List[Array[Double]] = {
-	  for ( ((a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13),(a14,a15,a16)) <- (accFeat zip tempFeat) ) 
-	    yield Array(inst.attribute("label").indexOfValue(label),a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15,a16.toDouble)
+	    accFeat: List[(Double, Double, Double, Double, Double, Double, Double, Double, Double, 
+	        Double, Double, Double, Double, Double, Double, Double, Double, Double)], 
+	    tempFeat: List[(Double, Double, Double, Double, Long)], label: String, inst: Instances): List[Array[Double]] = {
+	  for ( ((a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15,a16,a17,a18,a19),(a20,a21,a22,a23,a24)) <- (accFeat zip tempFeat) ) 
+	    yield Array(inst.attribute("label").indexOfValue(label),a2,a3,a4,a5,a6,a7,a8,a9,a10,
+	        a11,a12,a13,a14,a15,a16,a17,a18,a19,a20,a21,a22,a23,a24.toDouble)
 	}
 	
 	/*
 	 * Feature computation
 	 */
 	
-	def accFeatures(file: String): List[(Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double)] = {
+	def accFeatures(file: String): List[(Double, Double, Double, Double, Double, Double, Double, Double, Double, 
+	    Double, Double, Double, Double, Double, Double, Double, Double, Double)] = {
 	  // returns [(meanx, meany, meanz, variancex, variancey, variancez, 
-	  // correlationxy, correlationyz, correlationxz, energyx, energyy, energyz)]; 
-	  // one list entry = one 30 second window
+	  // correlationxy, correlationyz, correlationxz, energyx, energyy, energyz,
+	  // minx, miny, minz, maxx, maxy, maxz)]; 
+	  // one list entry = one timeframe
 	  val csvf = new CSVFile(file)
-	  var features = new ArrayBuffer[(Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double)]
+	  var features = new ArrayBuffer[(Double, Double, Double, Double, Double, Double, Double, Double, Double, 
+	      Double, Double, Double, Double, Double, Double, Double, Double, Double)]
 	  var xi, xj, yi, yj, zi, zj = new Array[Double](FrameDuration*32)
 	  var i, j = 0
 	  for (row <- csvf.drop(2)) {
@@ -131,14 +142,16 @@ object EatingRecognition {
 	      val meanx = mean(xj, FrameDuration*32); val meany = mean(yj, FrameDuration*32); val meanz = mean(zj, FrameDuration*32)
 	      features.append((meanx, meany, meanz, variance(xj, meanx), variance(yj, meany), variance(zj, meanz),
 	          correlation(xj, yj, meanx, meany), correlation(yj, zj, meany, meanz), correlation(xj, zj, meanx, meanz), 
-	          energy(xj), energy(yj), energy(zj)))
+	          energy(xj), energy(yj), energy(zj), xj.reduceLeft(min), yj.reduceLeft(min), zj.reduceLeft(min),
+	          xj.reduceLeft(max), yj.reduceLeft(max), zj.reduceLeft(max)))
 	      xj = new Array[Double](FrameDuration*32); yj = new Array[Double](FrameDuration*32); zj = new Array[Double](FrameDuration*32)
 	      j = -1
 	    } else if (i==FrameDuration*32-1 && j==(FrameDuration*32)/2-1) {
 	      val meanx = mean(xi, FrameDuration*32); val meany = mean(yi, FrameDuration*32); val meanz = mean(zi, FrameDuration*32)
 	      features.append((meanx, meany, meanz, variance(xi, meanx), variance(yi, meany), variance(zi, meanz),
 	          correlation(xi, yi, meanx, meany), correlation(yi, zi, meany, meanz), correlation(xi, zi, meanx, meanz), 
-	          energy(xi), energy(yi), energy(zi)))
+	          energy(xi), energy(yi), energy(zi), xi.reduceLeft(min), yi.reduceLeft(min), zi.reduceLeft(min),
+	          xi.reduceLeft(max), yi.reduceLeft(max), zi.reduceLeft(max)))
 	      xi = new Array[Double](FrameDuration*32); yi = new Array[Double](FrameDuration*32); zi = new Array[Double](FrameDuration*32)
 	      i = -1
 	    }
@@ -148,12 +161,12 @@ object EatingRecognition {
 	  features.toList
 	}
 	
-	def tempFeatures(file: String): List[(Double, Double, Long)] = {
-	  // returns [(mean, variance, totalDuration)]; one list entry = one 30 second window (4 samples per seconds)
+	def tempFeatures(file: String): List[(Double, Double, Double, Double, Long)] = {
+	  // returns [(mean, variance, min, max, totalDuration)]; one list entry = one 30 second window (4 samples per seconds)
 	  // totalDuration of the eating session in seconds is added to each instance
 	  val csvf = new CSVFile(file)
 	  val totalDuration: Int = (csvf.size-2)/4
-	  var features = new ArrayBuffer[(Double, Double, Long)]
+	  var features = new ArrayBuffer[(Double, Double, Double, Double, Long)]
 	  var tempi, tempj = new Array[Double](FrameDuration*4)
 	  var i, j = 0
 	  for (row <- csvf.drop(2)) {
@@ -164,11 +177,13 @@ object EatingRecognition {
 	      tempj = new Array[Double](FrameDuration*4)
 	      j = -1
 	    } else if (i==(FrameDuration*4)/2-1 && j==FrameDuration*4-1) {
-	      features.append((mean(tempj, FrameDuration*4), variance(tempj, mean(tempj, FrameDuration*4)), totalDuration))
+	      features.append((mean(tempj, FrameDuration*4), variance(tempj, mean(tempj, FrameDuration*4)), 
+	          tempj.reduceLeft(min), tempj.reduceLeft(max), totalDuration))
 	      tempj = new Array[Double](FrameDuration*4)
 	      j = -1
 	    } else if (i==FrameDuration*4-1 && j==(FrameDuration*4)/2-1) {
-	      features.append((mean(tempi, FrameDuration*4), variance(tempi, mean(tempi, FrameDuration*4)), totalDuration))
+	      features.append((mean(tempi, FrameDuration*4), variance(tempi, mean(tempi, FrameDuration*4)), 
+	          tempi.reduceLeft(min), tempi.reduceLeft(max), totalDuration))
 	      tempi = new Array[Double](FrameDuration*4)
 	      i = -1
 	    }
@@ -187,6 +202,10 @@ object EatingRecognition {
 	def variance(vals: Array[Double], avg: Double): Double = vals match {
 	  case vs => (0.0 /: vs) { (a,e) => a + sqr(e - avg) } / vals.size
 	}
+	
+	def max(v1: Double, v2: Double) = if (v1 > v2) v1 else v2
+	
+	def min(v1: Double, v2: Double) = if (v1 < v2) v1 else v2
 	
 	def correlation(vals1: Array[Double], vals2: Array[Double], avg1: Double, avg2: Double): Double = 
 	  (for ((v1, v2) <- (vals1 zip vals2)) yield (v1-avg1)*(v2-avg2)).reduceLeft(_ + _) /
