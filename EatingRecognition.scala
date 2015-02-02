@@ -8,6 +8,11 @@ import java.io.IOException
 import java.nio.file._
 import weka.core._
 import weka.core.converters.ArffSaver
+import weka.classifiers.trees.J48
+import weka.classifiers.meta.FilteredClassifier
+import weka.filters.supervised.attribute.AttributeSelection
+import weka.attributeSelection.{Ranker,ReliefFAttributeEval}
+import weka.classifiers.Classifier
 
 object EatingRecognition {
   val FrameDuration = 10 	// length of a data frame in seconds
@@ -16,10 +21,16 @@ object EatingRecognition {
 	def main(args: Array[String]) {
 	  // create, in the respective directory that matches the timestamp,
 	  // the class.txt file for the objects retrieved from foursquare checkins
-	  createArffSet("../eating_data")	  
+	  val classifier = createModel("../eating_data")
+	  //classifyUnknown("../eating_data/1420630964_37db67")
+	  println("terminating")
 	}
 
-	def createArffSet(rootDir: String) {
+  	/*
+  	 * build and save model
+  	 */
+  
+	def createModel(rootDir: String): Classifier = {
 	  val checkins = getCheckins()
 	  val atts = createAttributes()
 	  val instances = new Instances("eatingdata", atts, 0)
@@ -41,8 +52,8 @@ object EatingRecognition {
 				  val timestamp = dir.getFileName.toString.stripSuffix("_37db67").toLong + GMTOffset
 				  for ((time,cat) <- checkins) 		// search if corresponding foursquare check-in exists
 				    if (timestamp-900 < time && timestamp+900 > time) category = cat
-				  val date = new java.util.Date(timestamp * 1000)
-				  println(date.toGMTString)
+				  // val date = new java.util.Date(timestamp * 1000)
+				  // println(date.toGMTString)
 			    }
 			    FileVisitResult.CONTINUE
 			  }
@@ -63,10 +74,9 @@ object EatingRecognition {
 			  // create ARFF file if not existing
 			  // add instance to ARFF file/instance array
 				if (dir.getFileName.toString != "eating_data") { 
-				  for (instanceValues <- featureListToAttValues(accFeat, tempFeat, label, instances)) {
-				    // setting attributes one at a time would be costly when dealing with many instances
+				  // setting attributes one at a time would be costly when dealing with many instances
+				  for (instanceValues <- featureListToAttValues(accFeat, tempFeat, label, instances))
 				    instances.add(new DenseInstance(1, instanceValues))
-				  }
 			    }
 			    FileVisitResult.CONTINUE
 			}
@@ -77,8 +87,39 @@ object EatingRecognition {
 		// write to ARFF file
 		val as = new ArffSaver()
 		as.setInstances(instances)
-		as.setFile(new java.io.File("instances.arff"))
-		as.writeBatch()
+		as.setFile(new java.io.File("labeled_instances.arff"))
+		as.writeBatch
+		
+		// build and return model
+		val ranker = new Ranker()
+		ranker.setNumToSelect(7)
+		val asel = new AttributeSelection()
+		asel.setSearch(ranker)
+		asel.setEvaluator(new ReliefFAttributeEval())
+		
+		val fc = new FilteredClassifier()
+		fc.setFilter(asel)
+		fc.setClassifier(new J48())
+		fc.buildClassifier(instances)
+		fc
+	}
+	
+	/*
+	 * classify a new instance
+	 */
+	
+	def classifyUnknown(dir: String): String = {
+	  val atts = createAttributes()
+	  val unlabeled = new Instances("unlabeled", atts, 0)
+	  unlabeled.setClassIndex(0)
+	  
+	  var accFeat = accFeatures(dir + "/ACC.csv")
+	  var tempFeat = tempFeatures(dir + "/TEMP.csv")
+	  
+	  for (instanceValues <- featureListToAttValues(accFeat, tempFeat, "?", unlabeled)) {
+	    unlabeled.add(new DenseInstance(1, instanceValues))
+	  }
+	  ""
 	}
 	
 	/*
@@ -219,15 +260,13 @@ object EatingRecognition {
 	/*
 	 * Class labels and Foursquare checkins
 	 */
-	
-	def matchCheckins() { 
-		
-	}
 
 	def assignLabel(file: String, category: String): String = {
+	  val fastfood_cat = "(Fast Food|Falafel|Sandwiches)"
 	  var out, fastfood, company = ""
 	  val csvf = new CSVFile(file)
-	  if (csvf.head(1) == "1" || category != null && new Regex("(Fast Food|Falafel|Sandwiches)").findAllIn(category).length > 0) fastfood = "f1" 
+	  if (csvf.head(1) == "1" || 
+	      category != null && new Regex(fastfood_cat).findAllIn(category).length > 0) fastfood = "f1" 
 	    else fastfood = "f0"
 	  if (csvf.head(2) == "0") company = "c0" else if (csvf.head(2) == "1") company = "c1"
 	  if (csvf.head(0) == "0") { out = "o0"; fastfood = "f" } 
