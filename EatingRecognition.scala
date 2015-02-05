@@ -19,10 +19,8 @@ object EatingRecognition {
   val GMTOffset = 3600 		// all timestamps are in GMT, add 1h for local time
   
 	def main(args: Array[String]) {
-	  // create, in the respective directory that matches the timestamp,
-	  // the class.txt file for the objects retrieved from foursquare checkins
 	  createModel("../eating_data")
-	  println(classifyUnknown("../eating_data/unlabeled/1421434680_37db67"))
+	  println(classifyUnknown("../eating_data/unlabeled/1422818452_37db67"))
 	}
 
 	def createModel(rootDir: String) {
@@ -44,7 +42,7 @@ object EatingRecognition {
 			    if (dir.getFileName.toString != "eating_data") { 
 			      category = null
 				  val timestamp = dir.getFileName.toString.stripSuffix("_37db67").toLong + GMTOffset
-				  for ((time,cat) <- checkins) 		// search if corresponding foursquare check-in exists
+				  for ((time,cat) <- checkins) 		// compare if corresponding foursquare check-in exists
 				    if (timestamp-900 < time && timestamp+900 > time) category = cat
 			    }
 			    FileVisitResult.CONTINUE
@@ -87,12 +85,12 @@ object EatingRecognition {
 		fc.setFilter(asel)
 		fc.setClassifier(new J48())
 		fc.buildClassifier(instances)
-		SerializationHelper.write("model_j48.dat", fc)
+		SerializationHelper.write("model_j48.ser", fc)
 	}
 	
 	
 	def classifyUnknown(dir: String): String = {
-	  val cls: Classifier = SerializationHelper.read("model_j48.dat").asInstanceOf[Classifier]
+	  val cls: Classifier = SerializationHelper.read("model_j48.ser").asInstanceOf[Classifier]
 	  val atts = createAttributes()
 	  val unlabeled = new Instances("unlabeled", atts, 0)
 	  unlabeled.setClassIndex(0)
@@ -106,7 +104,7 @@ object EatingRecognition {
 	    labels.append(cls.classifyInstance(unlabeled.instance(unlabeled.numInstances - 1)))
 	  }
 	  
-	  // get the string label for the most commonly assigned label
+	  // get the string label for the most commonly assigned (double) label
 	  unlabeled.classAttribute.value((labels.map(l => (l, labels.count(_ == l)))).maxBy(_._2)._1.toInt)
 	}
 	
@@ -137,7 +135,8 @@ object EatingRecognition {
 	def featureListToAttValues(
 	    accFeat: List[(Double, Double, Double, Double, Double, Double, Double, Double, Double, 
 	        Double, Double, Double, Double, Double, Double, Double, Double, Double)], 
-	    tempFeat: List[(Double, Double, Double, Double, Long)], label: String, inst: Instances): List[Array[Double]] = {
+	    tempFeat: List[(Double, Double, Double, Double, Long)], label: String, inst: Instances): 
+	    List[Array[Double]] = {
 	  for ( ((a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15,a16,a17,a18,a19),(a20,a21,a22,a23,a24)) 
 	      <- (accFeat zip tempFeat) ) 
 	    yield Array(inst.attribute("label").indexOfValue(label),a2,a3,a4,a5,a6,a7,a8,a9,a10,
@@ -160,7 +159,6 @@ object EatingRecognition {
 	  var xi, xj, yi, yj, zi, zj = new Array[Double](FrameDuration*32)
 	  var i, j = 0
 	  for (row <- csvf.drop(2)) {
-	    // 960 samples per 30 seconds = new instance every 480 samples (50% overlap)
 	    xi(i) = row(0).toDouble; xj(j) = row(0).toDouble
 	    yi(i) = row(1).toDouble; yj(j) = row(1).toDouble
 	    zi(i) = row(2).toDouble; zj(j) = row(2).toDouble
@@ -187,12 +185,12 @@ object EatingRecognition {
 	    }
 	    i += 1; j += 1
 	  }
-	  // println(features.toList.length + " " + features.toList.head)
 	  features.toList
 	}
 	
 	def tempFeatures(file: String): List[(Double, Double, Double, Double, Long)] = {
-	  // returns [(mean, variance, min, max, totalDuration)]; one list entry = one 30 second window (4 samples per seconds)
+	  // returns [(mean, variance, min, max, totalDuration)]
+	  // one list entry = one timeframe (at 4 samples per second)
 	  // totalDuration of the eating session in seconds is added to each instance
 	  val csvf = new CSVFile(file)
 	  val totalDuration: Int = (csvf.size-2)/4
@@ -200,7 +198,6 @@ object EatingRecognition {
 	  var tempi, tempj = new Array[Double](FrameDuration*4)
 	  var i, j = 0
 	  for (row <- csvf.drop(2)) {
-	    // 120 samples per 30 seconds = new instance every 60 samples (50% overlap)
 	    tempi(i) = row(0).toDouble; tempj(j) = row(0).toDouble
 	    if (i == (FrameDuration*4)/2-1 && j == (FrameDuration*4)/2-1) {
 	      // first set of values
@@ -219,7 +216,6 @@ object EatingRecognition {
 	    }
 	    i += 1; j += 1
 	  }
-	  // println(features.toList.length + " " + features.toList.head)
 	  features.toList
 	}
 	
