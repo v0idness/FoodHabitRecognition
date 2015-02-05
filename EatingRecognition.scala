@@ -262,7 +262,7 @@ object EatingRecognition {
 	def getCheckins(): List[(Long,String)] = {
 	  // for the prototype, the url is hard-coded
 	  // for a multi-user application, it is necessary to authenticate each user and use their own URLs
-	  val url = new java.net.URL("https://api.foursquare.com/v2/users/self/checkins?oauth_token=1TW3BWUBZHNRL2BX41H33TM4WKXVT0WMBC30F0L1WNWS0Q0J&v=20150131")
+	  val url = new java.net.URL("https://api.foursquare.com/v2/users/self/checkins?oauth_token=PLACE_TOKEN_HERE&v=20150131")
 	  val response = Source.fromInputStream(url.openStream).getLines.mkString("\n")
 	  val checkins = Json.parse(response)
 	  
